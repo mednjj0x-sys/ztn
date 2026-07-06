@@ -115,9 +115,6 @@ docs = [
     "mkdocstrings[python]>=0.24.0",
 ]
 
-[project.scripts]
-ztn-api = "apps.api.main:cli"
-ztn-worker = "apps.worker.main:cli"
 
 [tool.setuptools.packages.find]
 where = ["."]

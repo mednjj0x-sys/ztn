@@ -26,7 +26,7 @@ FROM base as builder
 RUN pip install --upgrade pip setuptools wheel
 
 # Copy requirements
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -e .
@@ -64,7 +64,7 @@ CMD ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--w
 FROM base as development
 
 # Install development dependencies
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 RUN pip install --no-cache-dir -e ".[dev]"
 
 # Copy application code
