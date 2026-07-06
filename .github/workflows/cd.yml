@@ -47,6 +47,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           target: production
+          no-cache: true
 
   deploy:
     name: Deploy to Production
