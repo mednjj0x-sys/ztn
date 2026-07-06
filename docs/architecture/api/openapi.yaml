@@ -1,0 +1,134 @@
+openapi: 3.1.0
+info:
+  title: Zero Trust Network Control API
+  version: 1.0.0
+  description: APIs for access evaluation, malware detection, threat intelligence, and evidence anchoring.
+servers:
+  - url: https://api.example.internal/v1
+paths:
+  /access/evaluate:
+    post:
+      summary: Evaluate whether a user/device/session may access a resource.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessEvaluationRequest'
+      responses:
+        '200':
+          description: Access decision produced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessEvaluationResponse'
+  /detections/events:
+    post:
+      summary: Submit telemetry or security events for behavioral analysis.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelemetryEventIn'
+      responses:
+        '202':
+          description: Event accepted for analysis.
+  /intel/indicators/query:
+    post:
+      summary: Query privacy-preserving indicators.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndicatorQueryRequest'
+      responses:
+        '200':
+          description: Matching indicators returned.
+  /evidence/anchor:
+    post:
+      summary: Anchor evidence to an immutable ledger.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceAnchorRequest'
+      responses:
+        '201':
+          description: Evidence anchored successfully.
+components:
+  schemas:
+    AccessEvaluationRequest:
+      type: object
+      required: [subject, deviceId, targetResource, context]
+      properties:
+        subject:
+          type: string
+        deviceId:
+          type: string
+        targetResource:
+          type: string
+        context:
+          type: object
+          properties:
+            sourceIp:
+              type: string
+            requestedAt:
+              type: string
+              format: date-time
+            riskScore:
+              type: number
+            userLocation:
+              type: string
+    AccessEvaluationResponse:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [allow, deny, challenge]
+        reason:
+          type: string
+        riskScore:
+          type: number
+        policyId:
+          type: string
+        sessionId:
+          type: string
+    TelemetryEventIn:
+      type: object
+      required: [deviceId, eventType, payload]
+      properties:
+        deviceId:
+          type: string
+        eventType:
+          type: string
+        payload:
+          type: object
+        occurredAt:
+          type: string
+          format: date-time
+    IndicatorQueryRequest:
+      type: object
+      required: [indicatorType, value]
+      properties:
+        indicatorType:
+          type: string
+        value:
+          type: string
+        privacyMode:
+          type: string
+          enum: [none, tokenized, encrypted]
+    EvidenceAnchorRequest:
+      type: object
+      required: [evidenceId, hash, actorId]
+      properties:
+        evidenceId:
+          type: string
+        hash:
+          type: string
+        actorId:
+          type: string
+        metadata:
+          type: object

@@ -1,0 +1,165 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ztn-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ztn
+      POSTGRES_PASSWORD: ztn_password
+      POSTGRES_DB: ztn_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/migration:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ztn"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ztn-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ztn-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass redis_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ztn-network
+
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ztn-api
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://ztn:ztn_password@postgres:5432/ztn_db
+      - REDIS_URL=redis://:redis_password@redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
+      - ENVIRONMENT=production
+      - DEBUG=false
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ztn-network
+
+  # Celery Worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ztn-worker
+    restart: unless-stopped
+    command: celery -A apps.worker.main worker --loglevel=info --concurrency=4
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://ztn:ztn_password@postgres:5432/ztn_db
+      - REDIS_URL=redis://:redis_password@redis:6379/0
+      - CELERY_BROKER_URL=redis://:redis_password@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:redis_password@redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
+      - ENVIRONMENT=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ztn-network
+
+  # Celery Beat (Scheduler)
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ztn-beat
+    restart: unless-stopped
+    command: celery -A apps.worker.main beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://ztn:ztn_password@postgres:5432/ztn_db
+      - REDIS_URL=redis://:redis_password@redis:6379/0
+      - CELERY_BROKER_URL=redis://:redis_password@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:redis_password@redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
+      - ENVIRONMENT=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ztn-network
+
+  # Prometheus (Metrics)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ztn-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./scripts/deployment/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - ztn-network
+
+  # Grafana (Visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ztn-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./scripts/deployment/grafana-dashboards:/etc/grafana/provisioning/dashboards
+      - ./scripts/deployment/grafana-datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - ztn-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  ztn-network:
+    driver: bridge
