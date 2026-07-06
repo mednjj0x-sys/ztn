@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     libpq-dev \
+    libssl-dev \
+    libffi-dev \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -26,10 +29,10 @@ FROM base as builder
 RUN pip install --upgrade pip setuptools wheel
 
 # Copy requirements
-COPY pyproject.toml README.md ./
+COPY requirements.txt ./
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Stage 3: Production image
 FROM base as production
@@ -42,6 +45,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY apps/ ./apps/
 COPY src/ ./src/
 COPY scripts/ ./scripts/
+COPY pyproject.toml README.md ./
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \
@@ -63,14 +67,14 @@ CMD ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--w
 # Stage 4: Development image
 FROM base as development
 
-# Install development dependencies
-COPY pyproject.toml README.md ./
-RUN pip install --no-cache-dir -e ".[dev]"
-
-# Copy application code
+# Copy requirements and source code
+COPY requirements.txt ./
 COPY apps/ ./apps/
 COPY src/ ./src/
 COPY scripts/ ./scripts/
+
+# Install development dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose port for development server with hot reload
 EXPOSE 8000
