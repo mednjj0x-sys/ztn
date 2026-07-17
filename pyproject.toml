@@ -75,9 +75,6 @@ dependencies = [
     
     # Rate Limiting
     "slowapi>=0.1.9",
-    
-    # CORS
-    "python-cors>=1.0.0",
 ]
 
 [project.optional-dependencies]
